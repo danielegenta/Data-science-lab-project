@@ -1,0 +1,375 @@
+{
+ "cells": [
+  {
+   "cell_type": "code",
+   "execution_count": 10,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "import pandas as pd\n",
+    "import numpy as np\n",
+    "import string\n",
+    "import csv\n",
+    "import matplotlib.pyplot as plt\n",
+    "\n",
+    "from sklearn.metrics import f1_score\n",
+    "from sklearn.feature_extraction.text import TfidfVectorizer\n",
+    "from sklearn.ensemble import RandomForestClassifier,VotingClassifier\n",
+    "from sklearn.tree import DecisionTreeClassifier\n",
+    "from sklearn.model_selection import train_test_split\n",
+    "from sklearn.decomposition import TruncatedSVD\n",
+    "from sklearn.naive_bayes import GaussianNB\n",
+    "from sklearn.svm import LinearSVC\n",
+    "from sklearn import svm\n",
+    "\n",
+    "from nltk.corpus import stopwords \n",
+    "from nltk.tokenize import word_tokenize\n",
+    "from nltk.stem import snowball \n",
+    "\n",
+    "from wordcloud import WordCloud\n",
+    "\n",
+    "import it_core_news_sm\n",
+    "from spacy.matcher import Matcher\n",
+    "import re"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 5,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "nlp = it_core_news_sm.load()\n",
+    "df=pd.read_csv('development.csv')"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 6,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "new_data=[]\n",
+    "for txt,clas in zip(df['text'],df['class']):\n",
+    "    if clas == 'pos':\n",
+    "         new_data.append([nlp(txt),1])\n",
+    "    else:\n",
+    "        new_data.append([nlp(txt),0])"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 21,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "matcher=Matcher(nlp.vocab)\n",
+    "to_del=['PUNCT']\n",
+    "def GreatFilter(doc):\n",
+    "    f_txt=[]\n",
+    "    find=0\n",
+    "    old=\"\"\n",
+    "    for token in doc:\n",
+    "        if token.pos_ not in to_del :\n",
+    "             f_txt.append(token.lemma_)\n",
+    "#             if find==1:\n",
+    "#                 f_txt.append(old+token.lemma_)\n",
+    "#                 find=0;\n",
+    "#             else:\n",
+    "#                 if token.lemma_.lower() not in ['molto','non','anche','']:\n",
+    "#                     f_txt.append(token.lemma_)\n",
+    "#                 else:\n",
+    "#                     find=1\n",
+    "#                     old=token.lemma_\n",
+    "    return f_txt\n",
+    "class Stem(object):\n",
+    "    def __init__(self):\n",
+    "        self.ita_stemmer=snowball.ItalianStemmer(ignore_stopwords=False)\n",
+    "    def __call__(self, document): \n",
+    "        stemm = []\n",
+    "        for t in word_tokenize(document):\n",
+    "            d = t.strip() \n",
+    "            aus_t=self.ita_stemmer.stem(word=d)\n",
+    "            stemm.append(aus_t)\n",
+    "        return stemm"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 8,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "db_filtered=[]\n",
+    "for x in new_data:\n",
+    "    db_filtered.append([GreatFilter(x[0]),x[1]])"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 11,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "db_words=[]\n",
+    "for row in db_filtered:\n",
+    "    string=\"\"\n",
+    "    for word in row[0]:\n",
+    "        if len(word)>2 and len(word)<17 and re.match(r'^[a-zA-Z]*$',word):\n",
+    "            string+=word+\" \"\n",
+    "    db_words.append([string,row[1]])"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 12,
+   "metadata": {},
+   "outputs": [
+    {
+     "data": {
+      "text/html": [
+       "<div>\n",
+       "<style scoped>\n",
+       "    .dataframe tbody tr th:only-of-type {\n",
+       "        vertical-align: middle;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe tbody tr th {\n",
+       "        vertical-align: top;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe thead th {\n",
+       "        text-align: right;\n",
+       "    }\n",
+       "</style>\n",
+       "<table border=\"1\" class=\"dataframe\">\n",
+       "  <thead>\n",
+       "    <tr style=\"text-align: right;\">\n",
+       "      <th></th>\n",
+       "      <th>text</th>\n",
+       "      <th>class</th>\n",
+       "    </tr>\n",
+       "  </thead>\n",
+       "  <tbody>\n",
+       "    <tr>\n",
+       "      <td>0</td>\n",
+       "      <td>Non essere hotel molto lussuoso cui avere mai ...</td>\n",
+       "      <td>1</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <td>1</td>\n",
+       "      <td>Siamo stato qui per notte primo della nostro s...</td>\n",
+       "      <td>1</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <td>2</td>\n",
+       "      <td>Hotel essere ben posizionare per visitare Tori...</td>\n",
+       "      <td>1</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <td>3</td>\n",
+       "      <td>arrivare del staff della camera della alare nu...</td>\n",
+       "      <td>1</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <td>4</td>\n",
+       "      <td>Abbiamo soggiornare per due notte alla fino de...</td>\n",
+       "      <td>1</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <td>...</td>\n",
+       "      <td>...</td>\n",
+       "      <td>...</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <td>28749</td>\n",
+       "      <td>hotel essere vecchio caratteristico dovere dir...</td>\n",
+       "      <td>0</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <td>28750</td>\n",
+       "      <td>Per essere stella camera essere spartano non r...</td>\n",
+       "      <td>1</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <td>28751</td>\n",
+       "      <td>mio mamma compreso tra essere stato giorno inc...</td>\n",
+       "      <td>1</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <td>28752</td>\n",
+       "      <td>essere sentito accogliere coccolato fin dalla ...</td>\n",
+       "      <td>1</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <td>28753</td>\n",
+       "      <td>Soggiorno fantasticare una posizione fantastic...</td>\n",
+       "      <td>1</td>\n",
+       "    </tr>\n",
+       "  </tbody>\n",
+       "</table>\n",
+       "<p>28754 rows × 2 columns</p>\n",
+       "</div>"
+      ],
+      "text/plain": [
+       "                                                    text  class\n",
+       "0      Non essere hotel molto lussuoso cui avere mai ...      1\n",
+       "1      Siamo stato qui per notte primo della nostro s...      1\n",
+       "2      Hotel essere ben posizionare per visitare Tori...      1\n",
+       "3      arrivare del staff della camera della alare nu...      1\n",
+       "4      Abbiamo soggiornare per due notte alla fino de...      1\n",
+       "...                                                  ...    ...\n",
+       "28749  hotel essere vecchio caratteristico dovere dir...      0\n",
+       "28750  Per essere stella camera essere spartano non r...      1\n",
+       "28751  mio mamma compreso tra essere stato giorno inc...      1\n",
+       "28752  essere sentito accogliere coccolato fin dalla ...      1\n",
+       "28753  Soggiorno fantasticare una posizione fantastic...      1\n",
+       "\n",
+       "[28754 rows x 2 columns]"
+      ]
+     },
+     "execution_count": 12,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "db_words[0]\n",
+    "db_tfidf=pd.DataFrame(db_words)\n",
+    "db_tfidf.columns=[\"text\",\"class\"]\n",
+    "db_tfidf"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 51,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "ita_sw=stopwords.words('italian')\n",
+    "i=ita_sw.index('non')\n",
+    "del ita_sw[i]\n",
+    "vectorizer = TfidfVectorizer(sublinear_tf = True,stop_words=ita_sw,min_df=1,max_df=0.25,ngram_range =(1,2))"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 52,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "X = vectorizer.fit_transform(db_tfidf['text'])\n",
+    "X_train, X_test, y_train, y_test = train_test_split(X, db_tfidf['class'], test_size=0.20, random_state=42)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 53,
+   "metadata": {},
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "0.965578948761928"
+      ]
+     },
+     "execution_count": 53,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "clf = svm.LinearSVC();\n",
+    "clf.fit(X_train,y_train);\n",
+    "sol1=clf.predict(X_test)\n",
+    "f1_score(y_test, sol1, average='weighted')"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 55,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "df=pd.read_csv('evaluation.csv')\n",
+    "# new_eval=[]\n",
+    "# for txt in df['text']:\n",
+    "#     new_eval.append(nlp(txt))"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 56,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "db_eval=[]\n",
+    "for x in new_eval:\n",
+    "    db_eval.append(GreatFilter(x))"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 57,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "db_words_eval=[]\n",
+    "for row in db_eval:\n",
+    "    string=\"\"\n",
+    "    for word in row:\n",
+    "        if len(word)>2 and len(word)<17 and re.match(r'^[a-zA-Z]*$',word):\n",
+    "            string+=word+\" \"\n",
+    "    db_words_eval.append(string)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 59,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "X = vectorizer.transform(db_words_eval)\n",
+    "y_pred_eval=clf.predict(X);"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 60,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "i=0\n",
+    "with open('ds.csv',encoding='utf-8',mode='w',newline='') as csv_files:\n",
+    "    writer=csv.writer(csv_files)\n",
+    "    writer.writerow([\"Id\",\"Predicted\"])\n",
+    "    for element in y_pred_eval:\n",
+    "        if element==1:\n",
+    "            writer.writerow([str(i),\"pos\"])\n",
+    "        else:\n",
+    "            writer.writerow([str(i),\"neg\"])\n",
+    "        i+=1"
+   ]
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "",
+   "name": ""
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.7.4"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 4
+}
